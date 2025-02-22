@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 
-export default function BudgetComparisonChart({ transactions }) {
+export default function BudgetComparisonChart({ transactions = [] }) {
   const [budgetData, setBudgetData] = useState([]); // Ensure budgetData is an array
 
   useEffect(() => {
@@ -64,9 +64,8 @@ export default function BudgetComparisonChart({ transactions }) {
         <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 my-6">
           Budget vs Actual Spending
         </h2>
-        <ResponsiveContainer width="100%" className={``} height={350}>
+        <ResponsiveContainer width="100%" height={350}>
           <BarChart
-
             data={processedData}
             margin={{ top: 10, right: 50, left: 50, bottom: 5 }}
           >
@@ -97,6 +96,16 @@ export default function BudgetComparisonChart({ transactions }) {
                 color: "#ffffff",
               }}
             />
+            <defs>
+              <linearGradient id="budgetGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#8a2be2" /> {/* Purple */}
+                <stop offset="100%" stopColor="#4b0082" /> {/* Indigo */}
+              </linearGradient>
+              <linearGradient id="actualGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FFD700" /> {/* Gold */}
+                <stop offset="100%" stopColor="#FFEA00" /> {/* Yellow */}
+              </linearGradient>
+            </defs>
             <Bar
               dataKey="budget"
               fill="url(#budgetGradient)" // Gradient for budget bars
@@ -121,17 +130,6 @@ export default function BudgetComparisonChart({ transactions }) {
                 fill="#ffffff" // White text for labels
               />
             </Bar>
-            {/* Gradient definitions for bars */}
-            <defs>
-              <linearGradient id="budgetGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#8a2be2" /> {/* Purple */}
-                <stop offset="100%" stopColor="#4b0082" /> {/* Indigo */}
-              </linearGradient>
-              <linearGradient id="actualGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#FFD700" /> {/* Gold */}
-                <stop offset="100%" stopColor="#FFEA00" /> {/* Yellow */}
-              </linearGradient>
-            </defs>
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,25 +34,27 @@ export default function Home() {
     description: "",
     category: "",
   });
-  const [budgetData, setBudgetData] = useState(null);
+  const [budgetData, setBudgetData] = useState([]);
 
   // State for current month
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const currentMonthName = new Date(2023, currentMonth).toLocaleString("en-US", {
-    month: "long",
-  });
+  const currentMonthName = new Date(2023, currentMonth).toLocaleString(
+    "en-US",
+    {
+      month: "long",
+    }
+  );
 
+  // Fetch data on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const transactionsResponse = await axios.get("/api/transactions");
+        const [transactionsResponse, budgetResponse] = await Promise.all([
+          axios.get("/api/transactions"),
+          axios.get("http://localhost:3000/api/budgets"),
+        ]);
         setTransactions(transactionsResponse.data);
-
-        const budgetResponse = await axios.get(
-          "http://localhost:3000/api/budgets"
-        );
-        setBudgetData(budgetResponse.data);
-        console.log("Budget Data:", budgetResponse.data);
+        setBudgetData(budgetResponse.data?.budgets || []);
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -62,19 +64,25 @@ export default function Home() {
   }, []);
 
   // Filter transactions for the current month
-  const filteredTransactions = transactions.filter((transaction) => {
-    const transactionMonth = new Date(transaction.date).getMonth();
-    return transactionMonth === currentMonth;
-  });
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((transaction) => {
+      const transactionMonth = new Date(transaction.date).getMonth();
+      return transactionMonth === currentMonth;
+    });
+  }, [transactions, currentMonth]);
 
-  // Function to handle month change
-  const handleMonthChange = (direction) => {
-    if (direction === "prev") {
-      setCurrentMonth((prevMonth) => (prevMonth === 0 ? 11 : prevMonth - 1));
-    } else if (direction === "next") {
-      setCurrentMonth((prevMonth) => (prevMonth === 11 ? 0 : prevMonth + 1));
-    }
-  };
+  // Handle month change
+  const handleMonthChange = useCallback((direction) => {
+    setCurrentMonth((prevMonth) =>
+      direction === "prev"
+        ? prevMonth === 0
+          ? 11
+          : prevMonth - 1
+        : prevMonth === 11
+        ? 0
+        : prevMonth + 1
+    );
+  }, []);
 
   // Add Transaction
   const addTransaction = async () => {
@@ -86,7 +94,7 @@ export default function Home() {
     const newTransaction = { ...form, amount: parseFloat(form.amount) };
     try {
       const response = await axios.post("/api/transactions", newTransaction);
-      setTransactions([...transactions, response.data]);
+      setTransactions((prev) => [...prev, response.data]);
       setForm({ amount: "", date: "", description: "", category: "" });
     } catch (error) {
       console.error("Error adding transaction:", error);
@@ -97,7 +105,7 @@ export default function Home() {
   const deleteTransaction = async (id) => {
     try {
       await axios.delete(`/api/transactions/${id}`);
-      setTransactions(transactions.filter((t) => t._id !== id));
+      setTransactions((prev) => prev.filter((t) => t._id !== id));
     } catch (error) {
       console.error("Error deleting transaction:", error);
     }
@@ -144,8 +152,8 @@ export default function Home() {
         `/api/transactions/${editMode}`,
         updatedTransaction
       );
-      setTransactions(
-        transactions.map((t) => (t._id === editMode ? response.data : t))
+      setTransactions((prev) =>
+        prev.map((t) => (t._id === editMode ? response.data : t))
       );
       cancelEdit();
     } catch (error) {
@@ -154,29 +162,30 @@ export default function Home() {
   };
 
   // Process data for charts
-  const chartData = transactions.reduce((acc, transaction) => {
-    const month = new Date(transaction.date).toLocaleString("default", {
-      month: "short",
-    });
+  const chartData = useMemo(() => {
+    return transactions.reduce((acc, transaction) => {
+      const month = new Date(transaction.date).toLocaleString("default", {
+        month: "short",
+      });
+      const existing = acc.find((item) => item.name === month);
+      if (existing) existing.expense += Math.abs(transaction.amount);
+      else acc.push({ name: month, expense: Math.abs(transaction.amount) });
+      return acc;
+    }, []);
+  }, [transactions]);
 
-    const existing = acc.find((item) => item.name === month);
-    if (existing) existing.expense += Math.abs(transaction.amount);
-    else acc.push({ name: month, expense: Math.abs(transaction.amount) });
-    return acc;
-  }, []);
-
-  const categoryData = filteredTransactions.reduce((acc, transaction) => {
-    const category = transaction.category || "Uncategorized";
-    const existing = acc.find((item) => item.name === category);
-
-    if (existing) {
-      existing.value += Math.abs(transaction.amount);
-    } else {
-      acc.push({ name: category, value: Math.abs(transaction.amount) });
-    }
-
-    return acc;
-  }, []);
+  const categoryData = useMemo(() => {
+    return filteredTransactions.reduce((acc, transaction) => {
+      const category = transaction.category || "Uncategorized";
+      const existing = acc.find((item) => item.name === category);
+      if (existing) {
+        existing.value += Math.abs(transaction.amount);
+      } else {
+        acc.push({ name: category, value: Math.abs(transaction.amount) });
+      }
+      return acc;
+    }, []);
+  }, [filteredTransactions]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white p-6">
@@ -304,118 +313,124 @@ export default function Home() {
                   Transactions
                 </h2>
                 <div className="max-h-96 overflow-y-auto">
-                  {" "}
-                  {/* Scrollable container */}
-
-                  { filteredTransactions.length === 0 ? <h1 className="text-center text-gray-300">No Data Available</h1> : filteredTransactions.map((t) => (
-                    <motion.div
-                      key={t._id}
-                      className="flex justify-between p-4 border-b border-white/10 hover:bg-white/5 transition-all"
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      {editMode === t._id ? (
-                        <div className="grid gap-2 w-full">
-                          <Input
-                            type="number"
-                            value={editForm.amount}
-                            onChange={(e) =>
-                              setEditForm({
-                                ...editForm,
-                                amount: e.target.value,
-                              })
-                            }
-                            className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
-                          />
-                          <Input
-                            type="date"
-                            value={editForm.date}
-                            onChange={(e) =>
-                              setEditForm({ ...editForm, date: e.target.value })
-                            }
-                            className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
-                          />
-                          <Select
-                            onValueChange={(value) =>
-                              setEditForm({ ...editForm, category: value })
-                            }
-                          >
-                            <SelectTrigger className="bg-white/10 border border-white/10 text-white">
-                              <SelectValue
-                                placeholder={
-                                  editForm.category || "Select Category"
-                                }
-                              />
-                            </SelectTrigger>
-                            <SelectContent className="bg-gray-800 border border-white/10">
-                              {[
-                                "Food",
-                                "Transport",
-                                "Shopping",
-                                "Bills",
-                                "Entertainment",
-                                "Others",
-                              ].map((cat) => (
-                                <SelectItem
-                                  key={cat}
-                                  value={cat}
-                                  className="hover:bg-gray-700"
-                                >
-                                  {cat}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            value={editForm.description}
-                            onChange={(e) =>
-                              setEditForm({
-                                ...editForm,
-                                description: e.target.value,
-                              })
-                            }
-                            className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
-                          />
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={updateTransaction}
-                              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+                  {filteredTransactions.length === 0 ? (
+                    <h1 className="text-center text-gray-300">
+                      No Data Available
+                    </h1>
+                  ) : (
+                    filteredTransactions.map((t) => (
+                      <motion.div
+                        key={t._id}
+                        className="flex justify-between p-4 border-b border-white/10 hover:bg-white/5 transition-all"
+                        whileHover={{ scale: 1.02 }}
+                      >
+                        {editMode === t._id ? (
+                          <div className="grid gap-2 w-full">
+                            <Input
+                              type="number"
+                              value={editForm.amount}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  amount: e.target.value,
+                                })
+                              }
+                              className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
+                            />
+                            <Input
+                              type="date"
+                              value={editForm.date}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  date: e.target.value,
+                                })
+                              }
+                              className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
+                            />
+                            <Select
+                              onValueChange={(value) =>
+                                setEditForm({ ...editForm, category: value })
+                              }
                             >
-                              Save
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              onClick={cancelEdit}
-                              className="bg-white/10 border border-white/10 text-white hover:bg-white/20"
-                            >
-                              Cancel
-                            </Button>
+                              <SelectTrigger className="bg-white/10 border border-white/10 text-white">
+                                <SelectValue
+                                  placeholder={
+                                    editForm.category || "Select Category"
+                                  }
+                                />
+                              </SelectTrigger>
+                              <SelectContent className="bg-gray-800 border border-white/10">
+                                {[
+                                  "Food",
+                                  "Transport",
+                                  "Shopping",
+                                  "Bills",
+                                  "Entertainment",
+                                  "Others",
+                                ].map((cat) => (
+                                  <SelectItem
+                                    key={cat}
+                                    value={cat}
+                                    className="hover:bg-gray-700"
+                                  >
+                                    {cat}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              value={editForm.description}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  description: e.target.value,
+                                })
+                              }
+                              className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={updateTransaction}
+                                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                onClick={cancelEdit}
+                                className="bg-white/10 border border-white/10 text-white hover:bg-white/20"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="flex justify-between w-full items-center">
-                          <span className="text-lg">
-                            {t.description} - ${t.amount} ({t.category})
-                          </span>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              onClick={() => startEdit(t)}
-                              className="bg-white/10 border border-white/10 text-white hover:bg-white/20"
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              onClick={() => deleteTransaction(t._id)}
-                              className="bg-red-500/10 border border-red-500/10 text-red-400 hover:bg-red-500/20"
-                            >
-                              Delete
-                            </Button>
+                        ) : (
+                          <div className="flex justify-between w-full items-center">
+                            <span className="text-lg">
+                              {t.description} - ${t.amount} ({t.category})
+                            </span>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                onClick={() => startEdit(t)}
+                                className="bg-white/10 border border-white/10 text-white hover:bg-white/20"
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                onClick={() => deleteTransaction(t._id)}
+                                className="bg-red-500/10 border border-red-500/10 text-red-400 hover:bg-red-500/20"
+                              >
+                                Delete
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
+                        )}
+                      </motion.div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -459,9 +474,10 @@ export default function Home() {
               <CategoryWiseExpenses transactions={filteredTransactions} />
             </div>
           </motion.div>
-      {/* Full-Width Budget Comparison Chart */}
         </div>
       </div>
+
+      {/* Full-Width Budget Comparison Chart */}
       <div className="mt-8 w-full">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -471,7 +487,6 @@ export default function Home() {
           <BudgetComparisonChart transactions={filteredTransactions} />
         </motion.div>
       </div>
-
     </div>
   );
 }
