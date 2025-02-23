@@ -44,7 +44,7 @@ export default function BudgetModal() {
         return;
       }
 
-      const response = await axios.post("http://localhost:3000/api/budgets", {
+      const response = await axios.post("/api/budgets", {
         budgets,
       });
 

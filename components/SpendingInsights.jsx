@@ -9,7 +9,7 @@ export default function SpendingInsights({ transactions }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get("http://localhost:3000/api/budgets");
+        const response = await axios.get("/api/budgets");
 
         // Ensure budgetData is an array
         const data = Array.isArray(response.data) ? response.data : [];

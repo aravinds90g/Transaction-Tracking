@@ -44,14 +44,16 @@ export default function Home() {
       month: "long",
     }
   );
+ 
 
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
   // Fetch data on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [transactionsResponse, budgetResponse] = await Promise.all([
-          axios.get("/api/transactions"),
-          axios.get("http://localhost:3000/api/budgets"),
+          axios.get(`/api/transactions`),
+          axios.get(`/api/budgets`),
         ]);
         setTransactions(transactionsResponse.data);
         setBudgetData(budgetResponse.data?.budgets || []);
@@ -93,7 +95,7 @@ export default function Home() {
 
     const newTransaction = { ...form, amount: parseFloat(form.amount) };
     try {
-      const response = await axios.post("/api/transactions", newTransaction);
+      const response = await axios.post(`/api/transactions`, newTransaction);
       setTransactions((prev) => [...prev, response.data]);
       setForm({ amount: "", date: "", description: "", category: "" });
     } catch (error) {
