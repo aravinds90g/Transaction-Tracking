@@ -1,15 +1,24 @@
 import connectMongo from "../../../lib/mongodb";
 import TransactionModel from "../../../model/Transaction";
 
-
 export async function GET() {
   try {
     await connectMongo();
     const transactions = await TransactionModel.find().sort({ createdAt: -1 });
 
-    return Response.json(transactions);
+    return new Response(JSON.stringify(transactions), {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Content-Type": "application/json",
+      },
+    });
   } catch (error) {
-    return Response.json({ message: error.message }, { status: 500 });
+    return new Response(JSON.stringify({ message: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 
@@ -24,9 +33,12 @@ export async function POST(req) {
     } = await req.json();
 
     if (!amount || !date || !description) {
-      return Response.json(
-        { message: "All fields are required!" },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ message: "All fields are required!" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
       );
     }
 
@@ -34,12 +46,29 @@ export async function POST(req) {
       amount,
       date,
       description,
-      category, // Assign the category (defaults to "Uncategorized" if empty)
+      category,
     });
 
-    return Response.json(newTransaction, { status: 201 });
+    return new Response(JSON.stringify(newTransaction), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (error) {
-    return Response.json({ message: error.message }, { status: 500 });
+    return new Response(JSON.stringify({ message: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
