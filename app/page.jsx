@@ -231,7 +231,7 @@ export default function Home() {
             <Card className="bg-opacity-20 backdrop-blur-md bg-white/10 border border-white/10 shadow-lg">
               <CardContent className="p-6 space-y-4">
                 <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 my-6">
-                  Add Transaction
+                  Adds Transaction
                 </h2>
                 <Input
                   type="number"
