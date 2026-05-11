@@ -2,82 +2,205 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    /* Backgrounds */
+    --bg-page:        #08080b;
+    --bg-bento:       #0d0d11;
+    --bg-surface:     rgba(255, 255, 255, 0.032);
+    --bg-surface-hover: rgba(255, 255, 255, 0.065);
+
+    /* Borders */
+    --border-subtle:  rgba(255, 255, 255, 0.055);
+    --border-active:  rgba(34, 211, 238, 0.30);
+
+    /* Accent Palette */
+    --accent-cyan:    #22d3ee;
+    --accent-cyan-dim: rgba(34, 211, 238, 0.15);
+    --accent-emerald: #34d399;
+    --accent-emerald-dim: rgba(52, 211, 153, 0.15);
+    --accent-rose:    #fb7185;
+    --accent-rose-dim: rgba(251, 113, 133, 0.15);
+    --accent-amber:   #fbbf24;
+    --accent-violet:  #a78bfa;
+    --accent-blue:    #60a5fa;
+    --accent-orange:  #fb923c;
+
+    /* Text */
+    --text-primary:   rgba(255, 255, 255, 0.92);
+    --text-secondary: rgba(255, 255, 255, 0.58);
+    --text-muted:     rgba(255, 255, 255, 0.35);
+
+    /* Glows */
+    --glow-cyan:      0 0 28px rgba(34, 211, 238, 0.18), 0 0 4px rgba(34, 211, 238, 0.08);
+    --glow-emerald:   0 0 28px rgba(52, 211, 153, 0.18), 0 0 4px rgba(52, 211, 153, 0.08);
+    --glow-rose:      0 0 28px rgba(251, 113, 133, 0.18), 0 0 4px rgba(251, 113, 133, 0.08);
+
+    /* Shadcn Tokens */
+    --background:      240 12% 4%;
+    --foreground:      0 0% 92%;
+    --card:            240 10% 5%;
+    --card-foreground: 0 0% 92%;
+    --popover:         240 10% 6%;
+    --popover-foreground: 0 0% 92%;
+    --primary:         189 85% 52%;
+    --primary-foreground: 240 12% 4%;
+    --secondary:       240 6% 11%;
+    --secondary-foreground: 0 0% 92%;
+    --muted:           240 6% 11%;
+    --muted-foreground: 0 0% 42%;
+    --accent:          240 6% 11%;
+    --accent-foreground: 0 0% 92%;
+    --destructive:     350 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border:          240 6% 14%;
+    --input:           240 6% 14%;
+    --ring:            189 85% 52%;
+    --radius:          0.875rem;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-feature-settings: "ss01", "cv01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+  html {
+    scroll-behavior: smooth;
   }
 }
 
+/* ─── Number / Mono Font ────────────────────────────────── */
+.font-number {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
 
+/* ─── Gradient Text ─────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #22d3ee 0%, #34d399 60%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.gradient-text-rose {
+  background: linear-gradient(135deg, #fb7185 0%, #f43f5e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
+/* ─── Bento Card Base ───────────────────────────────────── */
+@layer components {
+  .bento-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 1.25rem;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
   }
-  body {
-    @apply bg-background text-foreground;
+  .bento-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, transparent 60%);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .bento-card:hover {
+    border-color: var(--border-active);
+    box-shadow: var(--glow-cyan);
+    background: var(--bg-surface-hover);
   }
 }
+
+/* ─── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.10);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.20); }
+
+/* ─── Shimmer Skeleton ──────────────────────────────────── */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.03) 25%,
+    rgba(255,255,255,0.07) 50%,
+    rgba(255,255,255,0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Page Background Orbs ──────────────────────────────── */
+.bg-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.12;
+}
+.bg-orb-cyan   { background: #22d3ee; width: 600px; height: 600px; top: -200px; left: -200px; }
+.bg-orb-violet { background: #818cf8; width: 500px; height: 500px; bottom: -150px; right: -150px; }
+.bg-orb-emerald{ background: #34d399; width: 350px; height: 350px; bottom: 25%; left: 50%; }
+
+/* ─── Input overrides for dark glass ───────────────────── */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.5);
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+/* ─── Recharts tooltip wrapper ──────────────────────────── */
+.recharts-tooltip-wrapper { outline: none !important; }
+.recharts-default-tooltip {
+  background: rgba(13,13,17,0.95) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 12px !important;
+  backdrop-filter: blur(20px) !important;
+}
+
+/* ─── Framer-Motion button base ─────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+  color: #08080b;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn-primary:hover { opacity: 0.9; }
+
+/* ─── Category pill colours ─────────────────────────────── */
+.cat-food        { background: rgba(251,146,60,0.15);  color: #fb923c; }
+.cat-transport   { background: rgba(96,165,250,0.15);  color: #60a5fa; }
+.cat-shopping    { background: rgba(167,139,250,0.15); color: #a78bfa; }
+.cat-bills       { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+.cat-entertainment { background: rgba(244,114,182,0.15); color: #f472b6; }
+.cat-others      { background: rgba(167,243,208,0.15); color: #34d399; }

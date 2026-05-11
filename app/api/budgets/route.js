@@ -28,7 +28,7 @@ export async function POST(req) {
     );
 
     return NextResponse.json(
-      { message: "Budget saved", budget },
+      { message: "Budget saved", budgets: budget.budgets },
       { status: 201, headers: corsHeaders }
     );
   } catch (error) {
@@ -46,21 +46,26 @@ export async function GET() {
 
     const budgetDoc = await BudgetModel.findOne({}).lean();
     if (!budgetDoc || !budgetDoc.budgets) {
-      return NextResponse.json([], { status: 200, headers: corsHeaders });
+      return NextResponse.json(
+        { budgets: {} },
+        { status: 200, headers: corsHeaders }
+      );
     }
 
-    // Convert the Map to an array
-    const budgetArray = Object.entries(budgetDoc.budgets).map(
-      ([category, amount]) => ({
-        category,
-        amount,
-      })
-    );
+    // Convert Map to plain object if needed
+    const plainBudgets = {};
+    if (budgetDoc.budgets instanceof Map) {
+      budgetDoc.budgets.forEach((value, key) => {
+        plainBudgets[key] = value;
+      });
+    } else {
+      Object.assign(plainBudgets, budgetDoc.budgets);
+    }
 
-    return NextResponse.json(budgetArray, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return NextResponse.json(
+      { budgets: plainBudgets },
+      { status: 200, headers: corsHeaders }
+    );
   } catch (error) {
     return NextResponse.json(
       { message: error.message },

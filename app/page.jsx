@@ -1,494 +1,364 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import BudgetComparisonChart from "@/components/BudgetComparisonChart";
-import SpendingInsights from "@/components/SpendingInsights";
-import BudgetModal from "@/components/BudgetModal";
-import MonthlyExpensesChart from "@/components/MonthlyExpensesChart";
-import CategoryWiseExpenses from "@/components/CategoryWiseExpenses";
-import DashboardSummary from "@/components/DashboardSummary";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 import axios from "axios";
+import { ChevronLeft, ChevronRight, LayoutDashboard } from "lucide-react";
 
-export default function Home() {
-  const [transactions, setTransactions] = useState([]);
-  const [form, setForm] = useState({
-    amount: "",
-    date: "",
-    description: "",
-    category: "",
-  });
-  const [editMode, setEditMode] = useState(null); // Store transaction ID being edited
-  const [editForm, setEditForm] = useState({
-    amount: "",
-    date: "",
-    description: "",
-    category: "",
-  });
-  const [budgetData, setBudgetData] = useState([]);
+/* ── Components ─────────────────────────────────────────── */
+import BudgetModal            from "@/components/BudgetModal";
+import SummaryWidget          from "@/components/SummaryWidget";
+import AddTransactionForm     from "@/components/AddTransactionForm";
+import RecentTransactionsList from "@/components/RecentTransactionsList";
+import MonthlyExpensesChart   from "@/components/MonthlyExpensesChart";
+import CategoryWiseExpenses   from "@/components/CategoryWiseExpenses";
+import BudgetComparisonChart  from "@/components/BudgetComparisonChart";
+import SpendingInsights       from "@/components/SpendingInsights";
 
-  // State for current month
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const currentMonthName = new Date(2023, currentMonth).toLocaleString(
-    "en-US",
-    {
-      month: "long",
-    }
+/* ─── Tile wrapper ──────────────────────────────────────── */
+const tileVariants = {
+  hidden:  { opacity: 0, y: 24 },
+  visible: (i) => ({
+    opacity: 1, y: 0,
+    transition: { delay: i * 0.07, duration: 0.45, ease: [0.25, 0.1, 0.25, 1] },
+  }),
+};
+
+function BentoTile({ children, className = "", label, icon: Icon, delay = 0 }) {
+  return (
+    <motion.div
+      custom={delay}
+      variants={tileVariants}
+      initial="hidden"
+      animate="visible"
+      className={`bento-card p-5 flex flex-col ${className}`}
+    >
+      {(label || Icon) && (
+        <div className="flex items-center gap-2 mb-4 flex-shrink-0">
+          {Icon && (
+            <div className="w-6 h-6 rounded-lg bg-white/[0.06] flex items-center justify-center">
+              <Icon size={13} className="text-white/45" />
+            </div>
+          )}
+          {label && (
+            <span className="text-xs font-semibold text-white/38 uppercase tracking-widest">
+              {label}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="flex-1 min-h-0">{children}</div>
+    </motion.div>
   );
- 
+}
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-  // Fetch data on mount
+/* ─── Month names ───────────────────────────────────────── */
+const MONTH_NAMES = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
+
+/* ─── Skeleton shimmer tile ─────────────────────────────── */
+function SkeletonTile({ className }) {
+  return (
+    <div className={`bento-card ${className}`}>
+      <div className="skeleton-shimmer h-4 w-24 mb-4 rounded-lg" />
+      <div className="skeleton-shimmer h-full rounded-xl" />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+export default function Home() {
+  const [transactions,  setTransactions]  = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [currentMonth,  setCurrentMonth]  = useState(new Date().getMonth());
+  const [currentYear]                     = useState(new Date().getFullYear());
+
+  /* Fetch ─────────────────────────────────────────────────── */
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [transactionsResponse, budgetResponse] = await Promise.all([
-          axios.get(`/api/transactions`),
-          axios.get(`/api/budgets`),
-        ]);
-        setTransactions(transactionsResponse.data);
-        setBudgetData(budgetResponse.data?.budgets || []);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-
-    fetchData();
+    Promise.all([
+      axios.get("/api/transactions"),
+      axios.get("/api/budgets"),
+    ])
+      .then(([txRes]) => setTransactions(txRes.data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
-  // Filter transactions for the current month
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter((transaction) => {
-      const transactionMonth = new Date(transaction.date).getMonth();
-      return transactionMonth === currentMonth;
-    });
-  }, [transactions, currentMonth]);
+  /* Filtered transactions for selected month ─────────────── */
+  const filteredTransactions = useMemo(
+    () => transactions.filter((t) => new Date(t.date).getMonth() === currentMonth),
+    [transactions, currentMonth]
+  );
 
-  // Handle month change
-  const handleMonthChange = useCallback((direction) => {
-    setCurrentMonth((prevMonth) =>
-      direction === "prev"
-        ? prevMonth === 0
-          ? 11
-          : prevMonth - 1
-        : prevMonth === 11
-        ? 0
-        : prevMonth + 1
+  /* Chart data ────────────────────────────────────────────── */
+  const chartData = useMemo(() => {
+    const grouped = {};
+    transactions.forEach((t) => {
+      const key = new Date(t.date).toLocaleString("default", { month: "short" });
+      grouped[key] = (grouped[key] || 0) + Math.abs(t.amount);
+    });
+    return Object.entries(grouped).map(([name, expense]) => ({ name, expense }));
+  }, [transactions]);
+
+  const categoryData = useMemo(() =>
+    filteredTransactions.reduce((acc, t) => {
+      const cat = t.category || "Others";
+      const ex  = acc.find((i) => i.name === cat);
+      if (ex) ex.value += Math.abs(t.amount);
+      else acc.push({ name: cat, value: Math.abs(t.amount) });
+      return acc;
+    }, []),
+  [filteredTransactions]);
+
+  /* Month nav ─────────────────────────────────────────────── */
+  const handleMonthChange = useCallback((dir) => {
+    setCurrentMonth((m) =>
+      dir === "prev" ? (m === 0 ? 11 : m - 1) : (m === 11 ? 0 : m + 1)
     );
   }, []);
 
-  // Add Transaction
-  const addTransaction = async () => {
-    if (!form.amount || !form.date || !form.description || !form.category) {
-      alert("Please fill all fields");
-      return;
-    }
+  /* CRUD ──────────────────────────────────────────────────── */
+  const addTransaction = useCallback(async (form) => {
+    const res = await axios.post("/api/transactions", form);
+    setTransactions((prev) => [...prev, res.data]);
+  }, []);
 
-    const newTransaction = { ...form, amount: parseFloat(form.amount) };
-    try {
-      const response = await axios.post(`/api/transactions`, newTransaction);
-      setTransactions((prev) => [...prev, response.data]);
-      setForm({ amount: "", date: "", description: "", category: "" });
-    } catch (error) {
-      console.error("Error adding transaction:", error);
-    }
-  };
+  const deleteTransaction = useCallback(async (id) => {
+    await axios.delete(`/api/transactions/${id}`);
+    setTransactions((prev) => prev.filter((t) => t._id !== id));
+  }, []);
 
-  // Delete Transaction
-  const deleteTransaction = async (id) => {
-    try {
-      await axios.delete(`/api/transactions/${id}`);
-      setTransactions((prev) => prev.filter((t) => t._id !== id));
-    } catch (error) {
-      console.error("Error deleting transaction:", error);
-    }
-  };
-
-  // Start Edit Transaction
-  const startEdit = (transaction) => {
-    setEditMode(transaction._id);
-    setEditForm({
-      amount: transaction.amount,
-      date: transaction.date.split("T")[0],
-      description: transaction.description,
-      category: transaction.category || "",
+  const updateTransaction = useCallback(async (id, data) => {
+    const res = await axios.patch(`/api/transactions/${id}`, {
+      ...data, amount: parseFloat(data.amount),
     });
-  };
+    setTransactions((prev) => prev.map((t) => (t._id === id ? res.data : t)));
+  }, []);
 
-  // Cancel Edit
-  const cancelEdit = () => {
-    setEditMode(null);
-    setEditForm({ amount: "", date: "", description: "", category: "" });
-  };
-
-  // Update Transaction
-  const updateTransaction = async () => {
-    if (
-      !editForm.amount ||
-      !editForm.date ||
-      !editForm.description ||
-      !editForm.category
-    ) {
-      alert("Please fill all fields");
-      return;
-    }
-
-    const updatedTransaction = {
-      amount: parseFloat(editForm.amount),
-      date: editForm.date,
-      description: editForm.description,
-      category: editForm.category,
-    };
-
-    try {
-      const response = await axios.patch(
-        `/api/transactions/${editMode}`,
-        updatedTransaction
-      );
-      setTransactions((prev) =>
-        prev.map((t) => (t._id === editMode ? response.data : t))
-      );
-      cancelEdit();
-    } catch (error) {
-      console.error("Error updating transaction:", error);
-    }
-  };
-
-  // Process data for charts
-  const chartData = useMemo(() => {
-    return transactions.reduce((acc, transaction) => {
-      const month = new Date(transaction.date).toLocaleString("default", {
-        month: "short",
-      });
-      const existing = acc.find((item) => item.name === month);
-      if (existing) existing.expense += Math.abs(transaction.amount);
-      else acc.push({ name: month, expense: Math.abs(transaction.amount) });
-      return acc;
-    }, []);
-  }, [transactions]);
-
-  const categoryData = useMemo(() => {
-    return filteredTransactions.reduce((acc, transaction) => {
-      const category = transaction.category || "Uncategorized";
-      const existing = acc.find((item) => item.name === category);
-      if (existing) {
-        existing.value += Math.abs(transaction.amount);
-      } else {
-        acc.push({ name: category, value: Math.abs(transaction.amount) });
-      }
-      return acc;
-    }, []);
-  }, [filteredTransactions]);
-
+  /* ─── Render ────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white p-6">
-      <div className="fixed top-8 right-8 z-50">
-        <BudgetModal />
-      </div>
+    <MotionConfig reducedMotion="user">
+      {/* Ambient background orbs */}
+      <div className="bg-orb bg-orb-cyan"    aria-hidden />
+      <div className="bg-orb bg-orb-violet"  aria-hidden />
+      <div className="bg-orb bg-orb-emerald" aria-hidden />
 
-      {/* Fixed Month Navigation Buttons */}
-      <div className="fixed top-80 left-0 z-50">
-        <Button
-          onClick={() => handleMonthChange("prev")}
-          className="bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
+      <div className="relative z-10 min-h-screen p-4 lg:p-6">
+        {/* ── HEADER ─────────────────────────────────────────── */}
+        <motion.header
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="flex flex-wrap items-center justify-between gap-4 mb-6 max-w-[1440px] mx-auto"
         >
-          Previous Month
-        </Button>
-      </div>
-      <div className="fixed top-80 right-0 z-50">
-        <Button
-          onClick={() => handleMonthChange("next")}
-          className="bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
-        >
-          Next Month
-        </Button>
-      </div>
-
-      {/* Selected Month Display */}
-      <div className="text-center text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 mb-8">
-        {currentMonthName}
-      </div>
-
-      {/* Two-Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
-        {/* First Column: Add Transaction and Transactions */}
-        <div className="space-y-8">
-          {/* Add Transaction Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Card className="bg-opacity-20 backdrop-blur-md bg-white/10 border border-white/10 shadow-lg">
-              <CardContent className="p-6 space-y-4">
-                <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 my-6">
-                  Adds Transaction
-                </h2>
-                <Input
-                  type="number"
-                  min="0"
-                  value={form.amount}
-                  placeholder="Amount"
-                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                  className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
-                />
-                <Input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
-                />
-                <Select
-                  onValueChange={(value) =>
-                    setForm({ ...form, category: value })
-                  }
-                >
-                  <SelectTrigger className="bg-white/10 border border-white/10 text-white">
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border border-white/10">
-                    {[
-                      "Food",
-                      "Transport",
-                      "Shopping",
-                      "Bills",
-                      "Entertainment",
-                      "Others",
-                    ].map((cat) => (
-                      <SelectItem
-                        key={cat}
-                        value={cat}
-                        className="hover:bg-gray-700"
-                      >
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  placeholder="Description"
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
-                />
-                <Button
-                  onClick={addTransaction}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-                >
-                  Add
-                </Button>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Spending Insights */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 1.2 }}
-          >
-            <div>
-              <SpendingInsights transactions={filteredTransactions} />
+          {/* Logo / Title */}
+          <div className="flex items-center gap-3">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{
+                background: "linear-gradient(135deg, #22d3ee22 0%, #34d39922 100%)",
+                border: "1px solid rgba(34,211,238,0.20)",
+              }}
+            >
+              <LayoutDashboard size={16} className="text-accent-cyan" />
             </div>
-          </motion.div>
-
-          {/* Transactions List */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <Card className="bg-opacity-20 backdrop-blur-md bg-white/10 border border-white/10 shadow-lg">
-              <CardContent className="p-6 space-y-4">
-                <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 my-6">
-                  Transactions
-                </h2>
-                <div className="max-h-96 overflow-y-auto">
-                  {filteredTransactions.length === 0 ? (
-                    <h1 className="text-center text-gray-300">
-                      No Data Available
-                    </h1>
-                  ) : (
-                    filteredTransactions.map((t) => (
-                      <motion.div
-                        key={t._id}
-                        className="flex justify-between p-4 border-b border-white/10 hover:bg-white/5 transition-all"
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        {editMode === t._id ? (
-                          <div className="grid gap-2 w-full">
-                            <Input
-                              type="number"
-                              value={editForm.amount}
-                              onChange={(e) =>
-                                setEditForm({
-                                  ...editForm,
-                                  amount: e.target.value,
-                                })
-                              }
-                              className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
-                            />
-                            <Input
-                              type="date"
-                              value={editForm.date}
-                              onChange={(e) =>
-                                setEditForm({
-                                  ...editForm,
-                                  date: e.target.value,
-                                })
-                              }
-                              className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
-                            />
-                            <Select
-                              onValueChange={(value) =>
-                                setEditForm({ ...editForm, category: value })
-                              }
-                            >
-                              <SelectTrigger className="bg-white/10 border border-white/10 text-white">
-                                <SelectValue
-                                  placeholder={
-                                    editForm.category || "Select Category"
-                                  }
-                                />
-                              </SelectTrigger>
-                              <SelectContent className="bg-gray-800 border border-white/10">
-                                {[
-                                  "Food",
-                                  "Transport",
-                                  "Shopping",
-                                  "Bills",
-                                  "Entertainment",
-                                  "Others",
-                                ].map((cat) => (
-                                  <SelectItem
-                                    key={cat}
-                                    value={cat}
-                                    className="hover:bg-gray-700"
-                                  >
-                                    {cat}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              value={editForm.description}
-                              onChange={(e) =>
-                                setEditForm({
-                                  ...editForm,
-                                  description: e.target.value,
-                                })
-                              }
-                              className="bg-white/10 border border-white/10 text-white placeholder-gray-400"
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                onClick={updateTransaction}
-                                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-                              >
-                                Save
-                              </Button>
-                              <Button
-                                variant="secondary"
-                                onClick={cancelEdit}
-                                className="bg-white/10 border border-white/10 text-white hover:bg-white/20"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex justify-between w-full items-center">
-                            <span className="text-lg">
-                              {t.description} - ${t.amount} ({t.category})
-                            </span>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => startEdit(t)}
-                                className="bg-white/10 border border-white/10 text-white hover:bg-white/20"
-                              >
-                                Edit
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                onClick={() => deleteTransaction(t._id)}
-                                className="bg-red-500/10 border border-red-500/10 text-red-400 hover:bg-red-500/20"
-                              >
-                                Delete
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </motion.div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Second Column: Charts and Insights */}
-        <div className="space-y-20">
-          {/* Dashboard Summary */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.8 }}
-          >
             <div>
-              <DashboardSummary
+              <h1 className="text-lg font-bold gradient-text leading-none">
+                Fintrack
+              </h1>
+              <p className="text-[10px] text-white/30 tracking-wider uppercase">
+                Personal Finance
+              </p>
+            </div>
+          </div>
+
+          {/* Month Navigator */}
+          <div className="flex items-center gap-2 bg-white/[0.035] border border-white/[0.07] rounded-2xl px-4 py-2.5 backdrop-blur-xl">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => handleMonthChange("prev")}
+              className="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.06] flex items-center justify-center text-white/50 hover:text-white transition-all"
+            >
+              <ChevronLeft size={14} />
+            </motion.button>
+
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={currentMonth}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+                className="text-sm font-semibold text-white/80 w-24 text-center tabular-nums"
+              >
+                {MONTH_NAMES[currentMonth]}
+              </motion.span>
+            </AnimatePresence>
+
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => handleMonthChange("next")}
+              className="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.06] flex items-center justify-center text-white/50 hover:text-white transition-all"
+            >
+              <ChevronRight size={14} />
+            </motion.button>
+          </div>
+
+          {/* Budget button */}
+          <BudgetModal />
+        </motion.header>
+
+        {/* ── BENTO GRID ─────────────────────────────────────── */}
+        {loading ? (
+          <div className="grid grid-cols-12 gap-4 max-w-[1440px] mx-auto">
+            <SkeletonTile className="col-span-12 lg:col-span-4 min-h-[340px]" />
+            <SkeletonTile className="col-span-12 lg:col-span-8 min-h-[200px]" />
+            <SkeletonTile className="col-span-12 lg:col-span-7 min-h-[300px]" />
+            <SkeletonTile className="col-span-12 lg:col-span-5 min-h-[300px]" />
+            <SkeletonTile className="col-span-12 min-h-[60px]" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-12 gap-4 max-w-[1440px] mx-auto">
+
+            {/* ① Add Transaction ── col 1-4 ── row 1 */}
+            <BentoTile
+              className="col-span-12 lg:col-span-4"
+              label="New Transaction"
+              delay={0}
+              icon={() => (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={13} height={13}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              )}
+            >
+              <AddTransactionForm onAdd={addTransaction} />
+            </BentoTile>
+
+            {/* ② Summary ── col 5-12 ── row 1 */}
+            <BentoTile
+              className="col-span-12 lg:col-span-8"
+              label="Overview"
+              delay={1}
+              icon={() => (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={13} height={13}>
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <path d="M8 21h8M12 17v4" strokeLinecap="round" />
+                </svg>
+              )}
+            >
+              <SummaryWidget
                 transactions={filteredTransactions}
                 categoryData={categoryData}
               />
-            </div>
-          </motion.div>
+            </BentoTile>
 
-          {/* Monthly Expenses Chart */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-          >
-            <div>
+            {/* ③ Monthly Expenses Chart ── col 1-7 ── row 2 */}
+            <BentoTile
+              className="col-span-12 lg:col-span-7 min-h-[280px]"
+              label="Monthly Trends"
+              delay={2}
+              icon={() => (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={13} height={13}>
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            >
               <MonthlyExpensesChart chartData={chartData} />
-            </div>
-          </motion.div>
+            </BentoTile>
 
-          {/* Category-Wise Expenses */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-          >
-            <div>
+            {/* ④ Category Donut ── col 8-12 ── row 2 */}
+            <BentoTile
+              className="col-span-12 lg:col-span-5 min-h-[280px]"
+              label="By Category"
+              delay={3}
+              icon={() => (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={13} height={13}>
+                  <path d="M21.21 15.89A10 10 0 1 1 8 2.83" strokeLinecap="round" />
+                  <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                </svg>
+              )}
+            >
               <CategoryWiseExpenses transactions={filteredTransactions} />
-            </div>
-          </motion.div>
-        </div>
-      </div>
+            </BentoTile>
 
-      {/* Full-Width Budget Comparison Chart */}
-      <div className="mt-8 w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 1 }}
+            {/* ⑤ Budget Comparison ── col 1-5 ── row 3 */}
+            <BentoTile
+              className="col-span-12 lg:col-span-5 min-h-[320px]"
+              label="Budget vs Spent"
+              delay={4}
+              icon={() => (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={13} height={13}>
+                  <rect x="2" y="3" width="4" height="18" rx="1" />
+                  <rect x="10" y="8" width="4" height="13" rx="1" />
+                  <rect x="18" y="13" width="4" height="8" rx="1" />
+                </svg>
+              )}
+            >
+              <BudgetComparisonChart transactions={filteredTransactions} />
+            </BentoTile>
+
+            {/* ⑥ Recent Transactions ── col 6-12 ── row 3 */}
+            <BentoTile
+              className="col-span-12 lg:col-span-7 min-h-[320px]"
+              label={`${MONTH_NAMES[currentMonth]} Transactions`}
+              delay={5}
+              icon={() => (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={13} height={13}>
+                  <line x1="8" y1="6" x2="21" y2="6" strokeLinecap="round" />
+                  <line x1="8" y1="12" x2="21" y2="12" strokeLinecap="round" />
+                  <line x1="8" y1="18" x2="21" y2="18" strokeLinecap="round" />
+                  <line x1="3" y1="6" x2="3.01" y2="6" strokeLinecap="round" />
+                  <line x1="3" y1="12" x2="3.01" y2="12" strokeLinecap="round" />
+                  <line x1="3" y1="18" x2="3.01" y2="18" strokeLinecap="round" />
+                </svg>
+              )}
+            >
+              <RecentTransactionsList
+                transactions={filteredTransactions}
+                onEdit={updateTransaction}
+                onDelete={deleteTransaction}
+              />
+            </BentoTile>
+
+            {/* ⑦ Spending Insights ── full width ── row 4 */}
+            <motion.div
+              custom={6}
+              variants={tileVariants}
+              initial="hidden"
+              animate="visible"
+              className="col-span-12"
+            >
+              <div className="bento-card p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-6 h-6 rounded-lg bg-white/[0.06] flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={13} height={13} className="text-white/45">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-semibold text-white/38 uppercase tracking-widest">
+                    Spending Insights
+                  </span>
+                </div>
+                <SpendingInsights transactions={filteredTransactions} />
+              </div>
+            </motion.div>
+
+          </div>
+        )}
+
+        {/* Footer */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+          className="text-center text-[10px] text-white/20 mt-8 tracking-wider"
         >
-          <BudgetComparisonChart transactions={filteredTransactions} />
-        </motion.div>
+          FINTRACK · {currentYear} · Personal Finance Dashboard
+        </motion.p>
       </div>
-    </div>
+    </MotionConfig>
   );
 }

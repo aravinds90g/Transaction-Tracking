@@ -1,141 +1,154 @@
-import React, { useState, useEffect } from "react";
-import {
-  PieChart,
-  Pie,
-  Tooltip,
-  Legend,
-  Cell,
-  ResponsiveContainer,
-} from "recharts";
-import { Card, CardContent } from "@/components/ui/card";
+"use client";
+import React, { useMemo, useState } from "react";
+import { PieChart, Pie, Tooltip, Cell, ResponsiveContainer } from "recharts";
+import { motion } from "framer-motion";
 
-const COLORS = [
-  "#8A2BE2",
-  "#00C49F",
-  "#FFBB28",
-  "#FF8042",
-  "#AF19FF",
-  "#0088FE",
-];
+const PALETTE = {
+  Food:          { color: "#fb923c", bg: "rgba(251,146,60,0.14)",  emoji: "🍜" },
+  Transport:     { color: "#60a5fa", bg: "rgba(96,165,250,0.14)",  emoji: "🚗" },
+  Shopping:      { color: "#a78bfa", bg: "rgba(167,139,250,0.14)", emoji: "🛍️" },
+  Bills:         { color: "#fbbf24", bg: "rgba(251,191,36,0.14)",  emoji: "⚡" },
+  Entertainment: { color: "#f472b6", bg: "rgba(244,114,182,0.14)", emoji: "🎬" },
+  Others:        { color: "#34d399", bg: "rgba(52,211,153,0.14)",  emoji: "📦" },
+};
+const fallback = { color: "#94a3b8", bg: "rgba(148,163,184,0.14)", emoji: "💸" };
+
+function GlassTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const p    = PALETTE[payload[0].name] || fallback;
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-[#0d0d11]/95 px-4 py-3 shadow-2xl backdrop-blur-2xl">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-base">{p.emoji}</span>
+        <span className="text-sm font-medium" style={{ color: p.color }}>
+          {payload[0].name}
+        </span>
+      </div>
+      <p className="font-number text-lg font-semibold text-white/80">
+        ${payload[0].value.toFixed(2)}
+      </p>
+    </div>
+  );
+}
 
 export default function CategoryWiseExpenses({ transactions }) {
-  
-  const [categoryData, setCategoryData] = useState([]);
-  const [latestMonth, setLatestMonth] = useState("");
+  const [activeIndex, setActiveIndex] = useState(null);
 
-  useEffect(() => {
-    if (transactions.length === 0) return;
+  const categoryData = useMemo(() => {
+    if (!transactions?.length) return [];
+    return transactions.reduce((acc, t) => {
+      const category = t.category || "Others";
+      const existing = acc.find((item) => item.name === category);
+      if (existing) existing.value += Math.abs(t.amount);
+      else acc.push({ name: category, value: Math.abs(t.amount) });
+      return acc;
+    }, []);
+  }, [transactions]);
 
-    // Get the latest transaction month and year dynamically
-    const sortedTransactions = [...transactions].sort(
-      (a, b) => new Date(b.date) - new Date(a.date)
+  const total = categoryData.reduce((sum, c) => sum + c.value, 0);
+
+  if (!categoryData.length) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full py-12 gap-3">
+        <div className="text-4xl">🍩</div>
+        <p className="text-sm text-white/25">No category data</p>
+      </div>
     );
-
-    const latestTransactionDate = new Date(sortedTransactions[0].date);
-    const latestMonthNumber = latestTransactionDate.getMonth();
-    const latestYear = latestTransactionDate.getFullYear();
-
-    setLatestMonth(
-      latestTransactionDate.toLocaleString("en-US", {
-        month: "long",
-        year: "numeric",
-      })
-    );
-
-    // Filter and group transactions for the latest month
-    const data = transactions
-      .filter((transaction) => {
-        const transactionDate = new Date(transaction.date);
-        return (
-          transactionDate.getMonth() === latestMonthNumber &&
-          transactionDate.getFullYear() === latestYear
-        );
-      })
-      .reduce((acc, transaction) => {
-        const category = transaction.category || "Uncategorized";
-        const existing = acc.find((item) => item.name === category);
-        if (existing) {
-          existing.value += Math.abs(transaction.amount);
-        } else {
-          acc.push({ name: category, value: Math.abs(transaction.amount) });
-        }
-        return acc;
-      }, []);
-
-    setCategoryData(data);
-  }, [transactions]); // ✅ Updates dynamically when transactions change
+  }
 
   return (
-    <Card className="bg-opacity-20 backdrop-blur-md bg-white/10 border border-white/10 shadow-lg">
-      <CardContent className="p-6">
-        <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 my-6">
-          Category-wise Expenses for {transactions.length ===0 ? `Next Month` : latestMonth}
-        </h2>
-
-        {/* Show message if no data is available */}
-        {transactions.length === 0 ? (
-          <div className="text-center text-white/70">
-            No data available for {`Next Month`}.
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={categoryData}
-                cx="50%"
-                cy="50%"
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-                label={({
-                  cx,
-                  cy,
-                  midAngle,
-                  innerRadius,
-                  outerRadius,
-                  value,
-                  index,
-                }) => {
-                  const RADIAN = Math.PI / 180;
-                  const radius =
-                    innerRadius + (outerRadius - innerRadius) * 1.3;
-                  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-                  return (
-                    <text
-                      x={x}
-                      y={y}
-                      fill="white"
-                      textAnchor={x > cx ? "start" : "end"}
-                      dominantBaseline="central"
-                      fontSize={12}
-                    >
-                      {`${categoryData[index]?.name}: $${value}`}
-                    </text>
-                  );
-                }}
-              >
-                {categoryData.map((_, index) => (
+    <div className="flex flex-col gap-4 h-full">
+      {/* Donut */}
+      <div className="relative h-[200px] flex-shrink-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={categoryData}
+              cx="50%"
+              cy="50%"
+              innerRadius={62}
+              outerRadius={90}
+              paddingAngle={4}
+              dataKey="value"
+              onMouseEnter={(_, idx) => setActiveIndex(idx)}
+              onMouseLeave={() => setActiveIndex(null)}
+            >
+              {categoryData.map((entry, index) => {
+                const p = PALETTE[entry.name] || fallback;
+                return (
                   <Cell
                     key={`cell-${index}`}
-                    fill={COLORS[index % COLORS.length]}
+                    fill={p.color}
+                    stroke="transparent"
+                    opacity={activeIndex === null || activeIndex === index ? 1 : 0.35}
+                    style={{ transition: "opacity 0.2s, transform 0.2s" }}
                   />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "rgba(255, 255, 255, 0.1)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  borderRadius: "8px",
-                  color: "#ffffff",
+                );
+              })}
+            </Pie>
+            <Tooltip content={<GlassTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Centre label */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <p className="text-xs text-white/35 uppercase tracking-wider">Total</p>
+          <p className="font-number text-xl font-semibold text-white/80 leading-none mt-0.5">
+            ${total.toFixed(0)}
+          </p>
+        </div>
+      </div>
+
+      {/* Legend list */}
+      <div className="space-y-2 overflow-y-auto flex-1">
+        {categoryData
+          .sort((a, b) => b.value - a.value)
+          .map((cat, i) => {
+            const p    = PALETTE[cat.name] || fallback;
+            const pct  = total > 0 ? (cat.value / total) * 100 : 0;
+            return (
+              <motion.div
+                key={cat.name}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.06 }}
+                onMouseEnter={() => setActiveIndex(i)}
+                onMouseLeave={() => setActiveIndex(null)}
+                className="group flex items-center gap-3 px-3 py-2 rounded-xl transition-colors cursor-default"
+                style={{
+                  background: activeIndex === i ? p.bg : "transparent",
+                  border: `1px solid ${activeIndex === i ? p.color + "30" : "transparent"}`,
                 }}
-              />
-              <Legend layout="horizontal" wrapperStyle={{ color: "#ffffff" }} />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
-      </CardContent>
-    </Card>
+              >
+                <span className="text-sm w-5">{p.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span
+                      className="text-xs font-medium"
+                      style={{ color: p.color }}
+                    >
+                      {cat.name}
+                    </span>
+                    <span className="font-number text-xs text-white/50">
+                      ${cat.value.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.8, delay: i * 0.08, ease: "easeOut" }}
+                      className="h-full rounded-full"
+                      style={{ background: p.color }}
+                    />
+                  </div>
+                </div>
+                <span className="font-number text-xs text-white/30 w-9 text-right">
+                  {pct.toFixed(0)}%
+                </span>
+              </motion.div>
+            );
+          })}
+      </div>
+    </div>
   );
 }

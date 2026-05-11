@@ -1,115 +1,134 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { Card, CardContent } from "@/components/ui/card";
+import { motion } from "framer-motion";
+import {
+  CheckCircle, AlertTriangle, TrendingUp, Zap,
+} from "lucide-react";
+
+const CATEGORIES = ["Food", "Transport", "Shopping", "Bills", "Entertainment", "Others"];
 
 export default function SpendingInsights({ transactions }) {
-  const [budgetData, setBudgetData] = useState([]); // Ensure budgetData is an array
+  const [budgetData, setBudgetData] = useState({});
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await axios.get("/api/budgets");
-
-        // Ensure budgetData is an array
-        const data = Array.isArray(response.data) ? response.data : [];
-        setBudgetData(data);
-
-        console.log("Budget Data:", data);
-      } catch (error) {
-        console.error("Error fetching budget data:", error);
-      }
-    };
-
-    fetchData();
+    axios.get("/api/budgets")
+      .then((r) => setBudgetData(r.data?.budgets || {}))
+      .catch(console.error);
   }, []);
 
-  // Merge budget data with actual spending
-  const mergedData = budgetData.map((budgetItem) => {
-    const actualSpending =
-      transactions
-        ?.filter((txn) => txn.category === budgetItem.category)
-        ?.reduce((total, txn) => total + txn.amount, 0) ?? 0;
+  const insights = useMemo(() => {
+    let totalBudget = 0, totalSpent = 0;
+    const overspent = [];
+    let biggestExpense = { category: null, amount: 0 };
+    const categorySpend = {};
 
-    return {
-      category: budgetItem.category,
-      budget: budgetItem.amount,
-      actual: actualSpending,
-    };
-  });
+    CATEGORIES.forEach((cat) => {
+      const budget = budgetData[cat] || 0;
+      const spent  = transactions
+        .filter((t) => t.category === cat)
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-  const totalBudget = budgetData.reduce((sum, item) => sum + item.amount, 0);
+      categorySpend[cat] = { budget, spent };
+      totalBudget += budget;
+      totalSpent  += spent;
+      if (budget > 0 && spent > budget)
+        overspent.push({ category: cat, overAmount: spent - budget, percent: Math.round(((spent - budget) / budget) * 100) });
+      if (spent > biggestExpense.amount)
+        biggestExpense = { category: cat, amount: spent };
+    });
 
-  // Calculate total actual spending
-  const totalSpent = mergedData.reduce((sum, item) => sum + item.actual, 0);
-  const remainingBudget = totalBudget - totalSpent;
+    return { totalBudget, totalSpent, remaining: totalBudget - totalSpent, overspent, biggestExpense, categorySpend };
+  }, [budgetData, transactions]);
 
-  // Find overspent categories
-  const overspentCategories = mergedData
-    .filter((item) => item.actual > item.budget)
-    .map((item) => ({
-      category: item.category,
-      overspentAmount: item.actual - item.budget,
-      overspentPercent: Math.round(
-        ((item.actual - item.budget) / item.budget) * 100
-      ),
-    }));
-
-  // Find the biggest expense category (handle empty mergedData)
-  const biggestExpense =
-    mergedData.length > 0
-      ? mergedData.reduce((max, item) =>
-          item.actual > max.actual ? item : max
-        )
-      : { category: "None", actual: 0 };
+  const hasBudget = insights.totalBudget > 0;
+  const isOver    = insights.remaining < 0;
 
   return (
-    <Card className="bg-opacity-20 backdrop-blur-md bg-white/10 border border-white/10 shadow-lg">
-      <CardContent className="p-6">
-        <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 my-6">
-          Spending Insights
-        </h2>
-
-        {/* Remaining Budget */}
+    <div className="flex flex-wrap gap-3">
+      {/* Budget status banner */}
+      <motion.div
+        initial={{ opacity: 0, x: -12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.4 }}
+        className={`flex-1 min-w-[200px] flex items-start gap-3 p-4 rounded-2xl border ${
+          !hasBudget
+            ? "border-white/[0.07] bg-white/[0.03]"
+            : isOver
+            ? "border-accent-rose/20 bg-accent-rose/[0.07]"
+            : "border-accent-emerald/20 bg-accent-emerald/[0.07]"
+        }`}
+      >
         <div
-          className={`p-4 rounded-md ${
-            remainingBudget >= 0
-              ? "bg-green-300 backdrop-blur-md border border-green-900"
-              : "bg-red-300 backdrop-blur-md border border-red-900 "
+          className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+            !hasBudget
+              ? "bg-white/[0.07]"
+              : isOver
+              ? "bg-accent-rose/15"
+              : "bg-accent-emerald/15"
           }`}
         >
-          <p className="text-lg font-semibold text-black">
-            {remainingBudget >= 0
-              ? `You have $${remainingBudget} left in your budget this month.`
-              : `You have overspent $${Math.abs(remainingBudget)} this month!`}
+          {!hasBudget ? (
+            <Zap size={15} className="text-white/35" />
+          ) : isOver ? (
+            <AlertTriangle size={15} className="text-accent-rose" />
+          ) : (
+            <CheckCircle size={15} className="text-accent-emerald" />
+          )}
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-white/80 leading-snug">
+            {!hasBudget
+              ? "No budget set"
+              : isOver
+              ? `Over budget by $${Math.abs(insights.remaining).toFixed(2)}`
+              : `$${insights.remaining.toFixed(2)} remaining`}
+          </p>
+          <p className="text-xs text-white/35 mt-0.5">
+            {!hasBudget
+              ? "Set a budget to start tracking"
+              : `$${insights.totalSpent.toFixed(2)} spent of $${insights.totalBudget} budget`}
           </p>
         </div>
+      </motion.div>
 
-        {/* Overspending Alerts */}
-        {overspentCategories.length > 0 && (
-          <div className="mt-4 space-y-3">
-            {overspentCategories.map((item, index) => (
-              <div
-                key={index}
-                className="p-4 bg-red-300 backdrop-blur-md border border-red-900 rounded-md"
-              >
-                <p className="text-black">
-                  ⚠ You overspent ${item.overspentAmount} in the "
-                  {item.category}" category by {item.overspentPercent}%.
-                </p>
-              </div>
-            ))}
+      {/* Overspent pills */}
+      {insights.overspent.map((item, i) => (
+        <motion.div
+          key={item.category}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 + i * 0.06 }}
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl border border-accent-rose/20 bg-accent-rose/[0.07]"
+        >
+          <AlertTriangle size={13} className="text-accent-rose flex-shrink-0" />
+          <div>
+            <p className="text-xs font-semibold text-accent-rose">{item.category}</p>
+            <p className="text-[10px] text-white/35">
+              +${item.overAmount.toFixed(2)} ({item.percent}% over)
+            </p>
           </div>
-        )}
+        </motion.div>
+      ))}
 
-        {/* Biggest Expense */}
-        <div className="mt-4 p-4 bg-orange-300 backdrop-blur-md border border-orange-400 rounded-md">
-          <p className="text-black">
-            🔍 Your biggest expense this month is "{biggestExpense.category}"
-            with ${biggestExpense.actual} spent.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+      {/* Biggest expense */}
+      {insights.biggestExpense.category && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl border border-accent-cyan/15 bg-accent-cyan/[0.05]"
+        >
+          <TrendingUp size={13} className="text-accent-cyan flex-shrink-0" />
+          <div>
+            <p className="text-xs font-semibold text-white/70">Top spend</p>
+            <p className="text-[10px] text-white/35">
+              {insights.biggestExpense.category} · $
+              {insights.biggestExpense.amount.toFixed(2)}
+            </p>
+          </div>
+        </motion.div>
+      )}
+    </div>
   );
 }
